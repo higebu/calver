@@ -1,21 +1,14 @@
-package main
+package calver
 
 import (
-	"flag"
+	"bytes"
 	"fmt"
-	"os"
 	"strings"
-
-	"github.com/higebu/calver/calver"
+	"text/template"
+	"time"
 )
 
 var (
-	format   = flag.String("format", "YYYY.0M.0D", "The format string for version. See https://calver.org for the details.")
-	major    = flag.String("major", "", "specific major version.")
-	minor    = flag.String("minor", "", "specific minor version.")
-	micro    = flag.String("micro", "", "specific micro version.")
-	modifier = flag.String("modifier", "", "Modifier")
-
 	formatMap = map[string]string{
 		"YYYY":     "2006",
 		"YY":       "6",
@@ -45,7 +38,7 @@ func generateTimeFormat(format string) (string, error) {
 	return strings.Join(tf, "."), nil
 }
 
-type Params struct {
+type params struct {
 	ShortWeek      string
 	ZeroPaddedWeek string
 	Major          string
@@ -54,13 +47,30 @@ type Params struct {
 	Modifier       string
 }
 
-func main() {
-	flag.Parse()
-
-	v, err := calver.Generate(*format, *major, *minor, *micro, *modifier)
+func Generate(format, major, minor, micro, modifier string) (string, error) {
+	tf, err := generateTimeFormat(format)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return "", err
 	}
-	fmt.Print(v)
+	t := time.Now().UTC()
+	_, w := t.ISOWeek()
+	v := t.Format(tf)
+	p := params{
+		ShortWeek:      fmt.Sprintf("%d", w),
+		ZeroPaddedWeek: fmt.Sprintf("%02d", w),
+		Major:          major,
+		Minor:          minor,
+		Micro:          micro,
+		Modifier:       modifier,
+	}
+	tmpl, err := template.New("calver").Parse(v)
+	if err != nil {
+		return "", err
+	}
+	var b bytes.Buffer
+	err = tmpl.Execute(&b, p)
+	if err != nil {
+		return "", err
+	}
+	return string(b.Bytes()), nil
 }
